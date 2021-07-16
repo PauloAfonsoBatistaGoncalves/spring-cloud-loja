@@ -3,11 +3,6 @@ logging:
     org:
       springframework:
         web: DEBUG
-
-        
-spring:
-  application:
-    name: 'loja'
     
 eureka:
   client:
