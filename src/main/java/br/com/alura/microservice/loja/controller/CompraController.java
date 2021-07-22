@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 import br.com.alura.microservice.loja.controller.dto.CompraDto;
 import br.com.alura.microservice.loja.model.Compra;
 import br.com.alura.microservice.loja.service.CompraService;
+import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("/compra")
@@ -20,10 +21,9 @@ public class CompraController {
 	private CompraService compraService;
 	
 	@PostMapping
-	public Compra realizaCompra(@RequestBody CompraDto compra) {
+	public Compra realizaCompra(@RequestBody CompraDto compra) throws InterruptedException {
 		return compraService.realizarCompra(compra);
 	}
-	
 	
 	@GetMapping("/{id}")
 	public Compra getById(@PathVariable Long id) {

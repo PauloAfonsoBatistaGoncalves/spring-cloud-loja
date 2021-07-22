@@ -5,9 +5,9 @@ import java.time.LocalDate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-
-import com.netflix.hystrix.contrib.javanica.annotation.HystrixCommand;
+import org.springframework.web.client.HttpServerErrorException;
 
 import br.com.alura.microservice.loja.client.FornecedorClient;
 import br.com.alura.microservice.loja.client.TranspotadorClient;
@@ -19,10 +19,15 @@ import br.com.alura.microservice.loja.controller.dto.VoucherDto;
 import br.com.alura.microservice.loja.model.Compra;
 import br.com.alura.microservice.loja.model.enums.CompraState;
 import br.com.alura.microservice.loja.repository.CompraRepository;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead.Type;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import reactor.core.publisher.Mono;
 
 @Service
 public class CompraService {
 
+	private static final String BACKEND_A = "backendA";
 	private static Logger LOG = LoggerFactory.getLogger(CompraService.class);
 
 	@Autowired
@@ -34,15 +39,16 @@ public class CompraService {
 	@Autowired
 	private TranspotadorClient transpotadorClient;
 
-	@HystrixCommand(fallbackMethod = "realizaCompraFallback",
-			threadPoolKey = "realizarCompraThreadPool")
-	public Compra realizarCompra(CompraDto compra) {
+	@CircuitBreaker(name = BACKEND_A, fallbackMethod = "realizaCompraFallback")
+//	@Bulkhead(name = BACKEND_A , type = Type.THREADPOOL)
+//	@TimeLimiter(name = BACKEND_A, fallbackMethod = "realizaCompraFallback")
+	public Compra realizarCompra(CompraDto compra)  {
 		
 		Compra compraSalva = new Compra();
 		compraSalva.setEnderecoDestino(compra.getEndereco().toString());
 		compraSalva.setState(CompraState.RECEBIDO);
-		compraSalva = compraRepository.save(compraSalva);
-		
+		compraRepository.save(compraSalva);
+		compra.setCompraId(compraSalva.getId());
 		
 		final String estado = compra.getEndereco().getEstado();
 
@@ -68,16 +74,17 @@ public class CompraService {
 		compraSalva.setDataParaEntrega(voucher.getPrevisaoParaEntrega());
 		compraSalva.setVoucher(voucher.getNumero());
 		compraRepository.save(compraSalva);
-
+		compra.setCompraId(compraSalva.getId());
+		
 		return compraSalva;
 	}
 
-	@HystrixCommand(threadPoolKey = "getByIdThreadPool")
 	public Compra getById(Long id) {
 		return compraRepository.findById(id).orElseThrow();
 	}
 
-	public Compra realizaCompraFallback(CompraDto compra) {
+	public Compra realizaCompraFallback(CompraDto compra, Exception e) {
+		System.out.println("entrou fallback");
 		if(compra.getCompraId() != null) {
 			Compra compraSalva = 
 					compraRepository.findById(compra.getCompraId()).orElseThrow();
